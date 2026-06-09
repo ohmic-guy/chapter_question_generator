@@ -27,7 +27,16 @@ from __future__ import annotations
 
 from typing import Optional, Protocol, Sequence, Union, runtime_checkable
 
-from agentscope.message import Msg
+try:
+    from agentscope.message import Msg
+except ModuleNotFoundError:  # pragma: no cover - local fallback for non-AgentScope test envs
+    class Msg:  # type: ignore[no-redef]
+        """Minimal AgentScope Msg stand-in used only when agentscope is absent."""
+
+        def __init__(self, name: str, content: object, role: str = "assistant") -> None:
+            self.name = name
+            self.content = content
+            self.role = role
 
 
 # ─────────────────────────────────────────────────────────────────────────────
