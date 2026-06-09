@@ -1,64 +1,64 @@
 {
-  "schema_version": "1.0.0",
-  "generation": {
-    "max_refine_attempts": 3,
-    "top_up_on_dropped_bundles": true,
-    "drop_unroutable_defects": true
+  "version": 3,
+  "model_roles": {
+    "default": {
+      "provider": "openai",
+      "model_name": "<general>"
+    },
+    "math": {
+      "provider": "dashscope",
+      "model_name": "<reasoning>"
+    },
+    "validator": {
+      "provider": "anthropic",
+      "model_name": "<general>"
+    },
+    "vision": {
+      "provider": "openai",
+      "model_name": "<multimodal>"
+    }
   },
-  "retrieval": {
-    "min_chunks_required": 1,
-    "max_chunks_per_chapter": 20,
-    "include_math_image_chunks": true,
-    "mark_insufficient_when_below_minimum": true
+  "agents": {
+    "planner": {
+      "system_prompt": "Validate the assessment payload, plan chapter requests, and close conformance gaps with targeted top-up requests.",
+      "model": "default",
+      "tools": [
+        "allocate",
+        "conformance_count"
+      ]
+    },
+    "subject.math": {
+      "system_prompt": "Generate grounded mathematics Q&A bundles from retrieved chapter chunks, preserving source_chunk_ids and requested marks/difficulty.",
+      "model": "math",
+      "tools": [
+        "sympy_check"
+      ]
+    },
+    "component_provider": {
+      "system_prompt": "Attach and verify required components such as formulas, diagrams, tables, symbols, and math-image references.",
+      "model": "vision",
+      "tools": [
+        "sympy_check",
+        "object_fetch"
+      ]
+    },
+    "qa_validator": {
+      "system_prompt": "Validate every Q&A bundle for answer correctness, consistency, citation grounding, hardness, deduplication, and ambiguity before it leaves Layer 1.",
+      "model": "validator",
+      "tools": [
+        "sympy_check",
+        "numeric_eval"
+      ]
+    }
+  },
+  "generation": {
+    "chunk_window": 6,
+    "temperature": 0.4,
+    "max_refine": 2,
+    "max_topup": 3
   },
   "validation": {
-    "initial_layer1_status": "pending",
-    "passing_layer1_status": "pass",
-    "failing_layer1_status": "fail",
-    "require_source_chunk_ids": true,
-    "require_answer_explanation": true,
-    "stamp_only_passed_bundles": true
-  },
-  "deduplication": {
-    "enabled": true,
-    "scope": "assessment",
-    "normalisation": "strip-collapse-whitespace-lowercase",
-    "near_duplicate_detection": false
-  },
-  "question_contract": {
-    "question_types": [
-      "mcq",
-      "msq",
-      "numerical",
-      "short",
-      "long"
-    ],
-    "choice_types": [
-      "mcq",
-      "msq"
-    ],
-    "freeform_types": [
-      "numerical",
-      "short",
-      "long"
-    ],
-    "difficulties": [
-      "easy",
-      "medium",
-      "hard"
-    ],
-    "minimum_marks": 1,
-    "minimum_choice_options": 2,
-    "minimum_msq_correct_options": 2
-  },
-  "runtime": {
-    "agent_dispatch_method": "reply",
-    "chapter_execution": "sequential",
-    "message_content_field": "content"
-  },
-  "planner_feedback": {
-    "include_dropped_count": true,
-    "include_insufficient_context_warning": true,
-    "include_validation_warnings": true
+    "difficulty_confidence_min": 0.6,
+    "dedup_text_threshold": 0.9
   }
 }
