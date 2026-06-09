@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0.0",
+  "generation": {
+    "max_refine_attempts": 3,
+    "top_up_on_dropped_bundles": true,
+    "drop_unroutable_defects": true
+  },
+  "retrieval": {
+    "min_chunks_required": 1,
+    "max_chunks_per_chapter": 20,
+    "include_math_image_chunks": true,
+    "mark_insufficient_when_below_minimum": true
+  },
+  "validation": {
+    "initial_layer1_status": "pending",
+    "passing_layer1_status": "pass",
+    "failing_layer1_status": "fail",
+    "require_source_chunk_ids": true,
+    "require_answer_explanation": true,
+    "stamp_only_passed_bundles": true
+  },
+  "deduplication": {
+    "enabled": true,
+    "scope": "assessment",
+    "normalisation": "strip-collapse-whitespace-lowercase",
+    "near_duplicate_detection": false
+  },
+  "question_contract": {
+    "question_types": [
+      "mcq",
+      "msq",
+      "numerical",
+      "short",
+      "long"
+    ],
+    "choice_types": [
+      "mcq",
+      "msq"
+    ],
+    "freeform_types": [
+      "numerical",
+      "short",
+      "long"
+    ],
+    "difficulties": [
+      "easy",
+      "medium",
+      "hard"
+    ],
+    "minimum_marks": 1,
+    "minimum_choice_options": 2,
+    "minimum_msq_correct_options": 2
+  },
+  "runtime": {
+    "agent_dispatch_method": "reply",
+    "chapter_execution": "sequential",
+    "message_content_field": "content"
+  },
+  "planner_feedback": {
+    "include_dropped_count": true,
+    "include_insufficient_context_warning": true,
+    "include_validation_warnings": true
+  }
+}
