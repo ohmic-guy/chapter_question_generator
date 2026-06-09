@@ -84,8 +84,19 @@ class ChapterTeamRunner:
         self.qa_validator_agent = qa_validator_agent
         self.max_refine = max_refine
         self.defect_router = defect_router or DefectRouter(
-            generator=subject_generator_agent,
-            component_provider=component_provider_agent,
+            {
+                "citation_missing": (self.subject_generator_agent.name, self.subject_generator_agent.fix),
+                "citation_invalid": (self.subject_generator_agent.name, self.subject_generator_agent.fix),
+                "consistency": (self.subject_generator_agent.name, self.subject_generator_agent.fix),
+                "hardness_mismatch": (self.subject_generator_agent.name, self.subject_generator_agent.fix),
+                "ambiguity": (self.subject_generator_agent.name, self.subject_generator_agent.fix),
+                "dedup_fail": (self.subject_generator_agent.name, self.subject_generator_agent.fix),
+                "answer_wrong": (self.subject_generator_agent.name, self.subject_generator_agent.fix),
+                "math_error": (self.component_provider_agent.name, self.component_provider_agent.fix),
+                "formula_invalid": (self.component_provider_agent.name, self.component_provider_agent.fix),
+                "component_missing": (self.component_provider_agent.name, self.component_provider_agent.fix),
+                "sympy_fail": (self.component_provider_agent.name, self.component_provider_agent.fix),
+            }
         )
 
         self._assert_contracts()
@@ -223,7 +234,7 @@ class ChapterTeamRunner:
             if repair_attempt >= self.max_refine:
                 break
 
-            route = self.defect_router.route(verdict.defect_type)
+            route = self.defect_router.resolve(verdict.defect_type)
             if route is None:
                 break
 

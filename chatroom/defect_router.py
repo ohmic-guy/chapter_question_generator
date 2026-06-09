@@ -23,6 +23,7 @@ DO NOT import anything from this project here. Pure stdlib only.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Callable, Dict, Optional
 
 from agentscope.message import Msg
@@ -33,43 +34,58 @@ logger = logging.getLogger(__name__)
 FixerFn = Callable[[Msg], Msg]
 
 
+@dataclass(frozen=True)
+class FixerRoute:
+    """Result from DefectRouter.resolve() — holds both fixer and owner info."""
+    fixer: FixerFn
+    owner: str
+
+
 class DefectRouter:
     """
     Registry that maps a defect_type string → the agent fix() callable
-    that knows how to repair it.
+    that knows how to repair it, along with the owner agent name.
 
     Usage (api/container.py)
     ────────────────────────
         router = DefectRouter({
-            "math_error":       component_agent.fix,
-            "citation_missing": generator_agent.fix,
+            "math_error":       ("component_agent", component_agent.fix),
+            "citation_missing": ("generator_agent", generator_agent.fix),
             ...
         })
 
+    Or use register() for dynamic registration:
+        router.register("new_defect_type", new_fixer, owner="some_agent")
+
     Extension without code change
     ──────────────────────────────
-        router.register("new_defect_type", some_agent.fix)
+        router.register("new_defect_type", some_agent.fix, owner="some_agent")
     """
 
-    def __init__(self, routes: Optional[Dict[str, FixerFn]] = None) -> None:
-        self._routes: Dict[str, FixerFn] = dict(routes or {})
+    def __init__(self, routes: Optional[Dict[str, tuple[str, FixerFn]]] = None) -> None:
+        """
+        routes: dict mapping defect_type -> (owner_name, fixer_callable)
+        """
+        self._routes: Dict[str, tuple[str, FixerFn]] = dict(routes or {})
         logger.debug("DefectRouter initialised with %d routes", len(self._routes))
 
-    def resolve(self, defect_type: str) -> Optional[FixerFn]:
+    def resolve(self, defect_type: str) -> Optional[FixerRoute]:
         """
-        Return the fixer for defect_type, or None if unregistered.
+        Return the fixer and owner for defect_type, or None if unregistered.
 
         Callers treat None as: drop the bundle immediately (no fix possible).
         """
-        fixer = self._routes.get(defect_type)
-        if fixer is None:
+        route_data = self._routes.get(defect_type)
+        if route_data is None:
             logger.warning(
                 "DefectRouter: no fixer registered for defect_type=%r — bundle will be dropped",
                 defect_type,
             )
-        return fixer
+            return None
+        owner, fixer = route_data
+        return FixerRoute(fixer=fixer, owner=owner)
 
-    def register(self, defect_type: str, fixer: FixerFn) -> None:
+    def register(self, defect_type: str, fixer: FixerFn, *, owner: str) -> None:
         """
         Add or replace a route at runtime.
         Calling this after ChapterTeamRunner is constructed takes effect
@@ -77,8 +93,8 @@ class DefectRouter:
         """
         if defect_type in self._routes:
             logger.info("DefectRouter: replacing existing route for %r", defect_type)
-        self._routes[defect_type] = fixer
-        logger.debug("DefectRouter: registered fixer for %r", defect_type)
+        self._routes[defect_type] = (owner, fixer)
+        logger.debug("DefectRouter: registered fixer for %r (owner=%r)", defect_type, owner)
 
     def registered_types(self) -> list[str]:
         """Return sorted list of all registered defect_type keys."""
@@ -88,4 +104,4 @@ class DefectRouter:
         return f"DefectRouter(routes={self.registered_types()})"
 
 
-__all__ = ["FixerFn", "DefectRouter"]
+__all__ = ["FixerFn", "FixerRoute", "DefectRouter"]

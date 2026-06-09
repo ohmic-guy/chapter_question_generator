@@ -1,42 +1,36 @@
 {
   "_doc": "Chapter Question Generator — runtime configuration. Edit this file to swap models, add subjects, or tune generation. No code changes required.",
-
   "model_roles": {
     "_doc": "Each key becomes an AgentScope config_name. hub.py translates these into AgentScope model configs at startup.",
-
     "default": {
-      "provider":   "openai",
+      "provider": "openai",
       "model_name": "gpt-4o",
       "_doc": "General-purpose role. Used by DataRetrieveAgent and non-math SubjectGeneratorAgent."
     },
     "math": {
-      "provider":   "openai",
+      "provider": "openai",
       "model_name": "gpt-4o",
       "_doc": "Math/science generation role. Swap to a fine-tuned model here without touching any agent code."
     },
     "vision": {
-      "provider":   "openai",
+      "provider": "openai",
       "model_name": "gpt-4o",
       "_doc": "Multimodal role for ComponentProviderAgent. Must support image input for math image chunks."
     },
     "validator": {
-      "provider":   "openai",
+      "provider": "openai",
       "model_name": "gpt-4o-mini",
       "_doc": "Validator role. Lighter model is intentional — validation is structured checks, not open-ended generation."
     }
   },
-
   "agents": {
     "_doc": "Per-agent config. model_config_name must match a key in model_roles. system_prompt is injected at AgentBase init.",
-
     "data_retrieve": {
       "model_config_name": "default",
       "system_prompt": "You are a data retrieval agent for an exam question generator. Your only job is to fetch and return chapter chunks from storage — you do not generate questions. Given a chapter_id and book_id, retrieve all text and math-image chunks for that chapter. Order chunks so the most content-dense ones appear first. If the total chunk count is insufficient to support the requested question count (rule: need at least 2 chunks per question), set sufficient=false in your output and explain the shortfall. Never fabricate or infer content — return only what storage provides."
     },
-
     "subject_generator": {
       "_doc": "Per-subject config. SubjectGeneratorAgent reads subject from the chapter request and selects the matching entry. Falls back to 'default' if the subject is not listed.",
-
       "subjects": {
         "mathematics": {
           "model_config_name": "math",
@@ -60,35 +54,29 @@
         }
       }
     },
-
     "component_provider": {
       "model_config_name": "vision",
       "system_prompt": "You are a component verification agent for math and science exam questions. Your responsibilities: (1) for any question involving a formula or equation, verify it is well-formed and that the stated answer is mathematically consistent — use sympy_check when available; (2) for questions referencing a figure or math image chunk, fetch the image via object_fetch and confirm the question stem correctly describes it; (3) attach the verified component (formula, figure reference, table) to the bundle along with its source reference. If a formula is malformed or the answer contradicts the math, emit defect_type='sympy_fail' or 'math_error'. Do not rewrite questions — only verify and attach components."
     },
-
     "qa_validator": {
       "model_config_name": "validator",
       "system_prompt": "You are a Layer-1 quality gate for exam question bundles. Validate ONE bundle per call. Check in this order and stop at the first failure: (1) CITATION — source_chunk_ids must be non-empty and each ID must resolve to a real chunk that supports the question; (2) ANSWER CORRECTNESS — for numerical/math use numeric_eval; for factual use chunk grounding; never accept LLM assertion alone; (3) CONSISTENCY — the answer must directly answer the stem; for MCQ exactly one option must be correct; for MSQ the correct subset must be defensible; (4) HARDNESS — the item must match requested difficulty based on reasoning steps required; (5) DEDUP — the stem must not duplicate an existing item in the dedup index; (6) AMBIGUITY — exactly one defensible correct answer must exist. On failure, return passed=false with a specific defect_type from this list: citation_missing, citation_invalid, answer_wrong, consistency, hardness_mismatch, dedup_fail, ambiguity, math_error, formula_invalid, component_missing, sympy_fail. On success return passed=true."
     },
-
     "planner": {
       "_doc": "Informational only — the Planner is a separate component (Section 7). Listed here so the Planner's model role is centrally managed.",
       "model_config_name": "default",
       "system_prompt": "You are the assessment planner. Coordinate chapter generation across the full paper. Track per-chapter bundle counts against targets. When a chapter returns sufficient=false or dropped_count > 0, schedule top-up generation from adjacent chapters. Enforce paper-level constraints: total marks budget, difficulty distribution, type mix."
     }
   },
-
   "generation": {
     "_doc": "Shared generation parameters consumed by team_runner.py and individual agents.",
-
-    "chunk_window":  6,
-    "temperature":   0.4,
-    "max_refine":    2,
-
+    "chunk_window": 6,
+    "temperature": 0.4,
+    "max_refine": 2,
     "_notes": {
       "chunk_window": "Max chunks passed to SubjectGeneratorAgent per question type. Keeps context window bounded.",
-      "temperature":  "Low temperature for factual accuracy. Raise to 0.6-0.7 only for long-form/essay types.",
-      "max_refine":   "Max fix attempts per bundle in the refinement loop. 2 is the spec default. Raise to 3 for hard numerical questions if drop rate is high."
+      "temperature": "Low temperature for factual accuracy. Raise to 0.6-0.7 only for long-form/essay types.",
+      "max_refine": "Max fix attempts per bundle in the refinement loop. 2 is the spec default. Raise to 3 for hard numerical questions if drop rate is high."
     }
   }
 }
