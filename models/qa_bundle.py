@@ -47,7 +47,7 @@ from __future__ import annotations
 
 from typing import List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from models.chapter_request import QuestionType
 
@@ -57,6 +57,12 @@ from models.chapter_request import QuestionType
 
 Difficulty      = Literal["easy", "medium", "hard"]
 Layer1Status    = Literal["pass", "fail", "pending"]
+
+# Question types that require an options list
+_CHOICE_TYPES   = frozenset({"mcq", "msq"})
+# Question types where answer.value must be a plain string
+_FREEFORM_TYPES = frozenset({"numerical", "short", "long"})
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sub-models
@@ -154,7 +160,7 @@ class QABundle(BaseModel):
     difficulty:       Difficulty
     subject:          str
     source_chunk_ids: List[str]
-    validation:       ValidationStatus = Field(default_factory=ValidationStatus)
+    validation:       ValidationStatus = ValidationStatus()
 
     # ── field-level validators ────────────────────────────────────────────────
 
