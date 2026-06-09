@@ -1,102 +1,91 @@
 """
 chatroom/defect_router.py
-─────────────────────────
-Routes Layer-1 validation defects to the agent that can repair them.
+──────────────────────────
+Maps validator defect_type strings to the agent fix() callable
+responsible for repairing that defect.
 
-This is M8 orchestration code. It does not implement any agent's intelligence;
-it only owns the deterministic routing table used by ChapterTeamRunner.
+SOLID notes
+───────────
+  OCP  — new defect types are registered via register(); no code change needed.
+         The routing table is built in api/container.py (composition root),
+         not here and not in team_runner.py.
+  SRP  — owns only the routing concern; knows nothing about agents or bundles.
+  DIP  — team_runner depends on DefectRouter, not on concrete agent callables.
+
+Consumed by
+───────────
+  chatroom/team_runner.py  — calls router.resolve(defect_type) per failed bundle
+  api/container.py         — constructs and populates the router
+
+DO NOT import anything from this project here. Pure stdlib only.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Mapping, Optional
+import logging
+from typing import Callable, Dict, Optional
 
-from agents.protocols import IComponentProviderAgent, IRepairable, ISubjectGeneratorAgent
+from agentscope.message import Msg
 
+logger = logging.getLogger(__name__)
 
-GENERATOR_DEFECTS = frozenset(
-    {
-        "schema_invalid",
-        "citation_missing",
-        "citation_invalid",
-        "consistency",
-        "hardness_mismatch",
-        "ambiguity",
-        "dedup_fail",
-        "answer_wrong",
-    }
-)
-
-COMPONENT_PROVIDER_DEFECTS = frozenset(
-    {
-        "math_error",
-        "formula_invalid",
-        "component_missing",
-        "sympy_fail",
-    }
-)
-
-
-@dataclass(frozen=True)
-class RouteDecision:
-    """Resolved repair owner for a single validator defect."""
-
-    defect_type: str
-    owner: str
-    fixer: IRepairable
+# Callable shape every fixer must satisfy (mirrors IRepairable.fix)
+FixerFn = Callable[[Msg], Msg]
 
 
 class DefectRouter:
     """
-    Small deterministic dispatch table for the item-refinement loop.
+    Registry that maps a defect_type string → the agent fix() callable
+    that knows how to repair it.
 
-    Unknown defects return None; ChapterTeamRunner drops those bundles instead
-    of guessing which agent should repair them.
+    Usage (api/container.py)
+    ────────────────────────
+        router = DefectRouter({
+            "math_error":       component_agent.fix,
+            "citation_missing": generator_agent.fix,
+            ...
+        })
+
+    Extension without code change
+    ──────────────────────────────
+        router.register("new_defect_type", some_agent.fix)
     """
 
-    def __init__(
-        self,
-        generator: ISubjectGeneratorAgent,
-        component_provider: IComponentProviderAgent,
-        extra_routes: Optional[Mapping[str, str]] = None,
-    ) -> None:
-        routes: Dict[str, str] = {
-            **{defect: "generator" for defect in GENERATOR_DEFECTS},
-            **{defect: "component_provider" for defect in COMPONENT_PROVIDER_DEFECTS},
-        }
-        if extra_routes:
-            routes.update(extra_routes)
+    def __init__(self, routes: Optional[Dict[str, FixerFn]] = None) -> None:
+        self._routes: Dict[str, FixerFn] = dict(routes or {})
+        logger.debug("DefectRouter initialised with %d routes", len(self._routes))
 
-        self._routes = routes
-        self._fixers: Dict[str, IRepairable] = {
-            "generator": generator,
-            "component_provider": component_provider,
-        }
+    def resolve(self, defect_type: str) -> Optional[FixerFn]:
+        """
+        Return the fixer for defect_type, or None if unregistered.
 
-    def route(self, defect_type: Optional[str]) -> Optional[RouteDecision]:
-        """Return the fixer for defect_type, or None when it is not repairable."""
-        if not defect_type:
-            return None
-
-        owner = self._routes.get(defect_type)
-        if owner is None:
-            return None
-
-        fixer = self._fixers.get(owner)
+        Callers treat None as: drop the bundle immediately (no fix possible).
+        """
+        fixer = self._routes.get(defect_type)
         if fixer is None:
-            return None
+            logger.warning(
+                "DefectRouter: no fixer registered for defect_type=%r — bundle will be dropped",
+                defect_type,
+            )
+        return fixer
 
-        return RouteDecision(defect_type=defect_type, owner=owner, fixer=fixer)
+    def register(self, defect_type: str, fixer: FixerFn) -> None:
+        """
+        Add or replace a route at runtime.
+        Calling this after ChapterTeamRunner is constructed takes effect
+        on the next chapter run (runner holds a reference to this router).
+        """
+        if defect_type in self._routes:
+            logger.info("DefectRouter: replacing existing route for %r", defect_type)
+        self._routes[defect_type] = fixer
+        logger.debug("DefectRouter: registered fixer for %r", defect_type)
 
-    def owner_for(self, defect_type: Optional[str]) -> Optional[str]:
-        decision = self.route(defect_type)
-        return decision.owner if decision else None
+    def registered_types(self) -> list[str]:
+        """Return sorted list of all registered defect_type keys."""
+        return sorted(self._routes.keys())
+
+    def __repr__(self) -> str:
+        return f"DefectRouter(routes={self.registered_types()})"
 
 
-__all__ = [
-    "COMPONENT_PROVIDER_DEFECTS",
-    "GENERATOR_DEFECTS",
-    "DefectRouter",
-    "RouteDecision",
-]
+__all__ = ["FixerFn", "DefectRouter"]
